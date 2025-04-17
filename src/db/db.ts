@@ -67,6 +67,14 @@ db.serialize(() => {
       data_finalizacao TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
     )`
   );
+
+  db.run(`ALTER TABLE produtos ADD COLUMN tem_nf BOOLEAN DEFAULT 0`, (err) => {
+    if (err && !err.message.includes("duplicate column")) {
+      console.error("Erro ao adicionar coluna tem_nf:", err.message);
+    } else {
+      console.log("Coluna tem_nf adicionada com sucesso (ou já existia)");
+    }
+  });
 });
 
 export default db;

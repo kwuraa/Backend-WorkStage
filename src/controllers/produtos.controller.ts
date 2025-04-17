@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { run, query, get } from "../db/db";
 import db from "../db/db";
 import { promisify } from "util";
+import { io } from "../server";
 
 const dbAll = promisify(db.all).bind(db);
 
@@ -10,38 +11,77 @@ export const createProduto = async (
   res: Response
 ): Promise<void> => {
   try {
-    const { nome, descricao, processos } = req.body;
+    const { nome, descricao, processos, tem_nf } = req.body;
+
     if (!nome) {
       res.status(400).json({ error: "Nome do produto é obrigatório" });
       return;
     }
 
-    // Insere o produto
     const result = await run(
-      `INSERT INTO produtos (nome, descricao) VALUES (?, ?)`,
-      [nome, descricao || ""]
+      `INSERT INTO produtos (nome, descricao, tem_nf) VALUES (?, ?, ?)`,
+      [nome, descricao || "", tem_nf === true ? 1 : 0]
     );
+
     const produtoId = result.lastID;
 
-    // Insere processos (se existirem)
-    if (processos && processos.length) {
+    const processosInseridos = [];
+    if (Array.isArray(processos) && processos.length > 0) {
       for (const processo of processos) {
-        await run(`INSERT INTO processos (produto_id, nome) VALUES (?, ?)`, [
-          produtoId,
-          processo.nome,
-        ]);
+        if (processo && typeof processo === "object" && processo.nome) {
+          await run(`INSERT INTO processos (produto_id, nome) VALUES (?, ?)`, [
+            produtoId,
+            processo.nome,
+          ]);
+          processosInseridos.push({ nome: processo.nome });
+        }
       }
     }
 
-    res.status(201).json({
+    const novoProduto = {
       id: produtoId,
       nome,
       descricao: descricao || "",
+      tem_nf: tem_nf === true,
       status: "pendente",
-      processos: processos || [],
-    });
+      data_cadastro: new Date().toISOString(),
+      processos: processosInseridos,
+    };
+
+    io.emit("novo_produto", novoProduto);
+
+    res.status(201).json(novoProduto);
   } catch (error) {
+    console.error("Erro ao criar produto:", error);
     res.status(500).json({ error: "Erro ao criar produto" });
+  }
+};
+
+export const updateProdutoNF = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  try {
+    const { tem_nf } = req.body;
+
+    if (typeof tem_nf !== "boolean") {
+      res.status(400).json({ error: "Campo 'tem_nf' deve ser booleano" });
+      return;
+    }
+
+    const result = await run(`UPDATE produtos SET tem_nf = ? WHERE id = ?`, [
+      tem_nf ? 1 : 0,
+      req.params.id,
+    ]);
+
+    if (result.changes === 0) {
+      res.status(404).json({ error: "Produto não encontrado" });
+      return;
+    }
+
+    res.json({ message: "Valor de NF atualizado com sucesso" });
+  } catch (error) {
+    res.status(500).json({ error: "Erro ao atualizar valor de NF" });
   }
 };
 

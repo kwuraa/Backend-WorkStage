@@ -6,7 +6,7 @@ import {
   updateProdutoStatus,
   deleteProduto,
   searchProdutos,
-} from "../controllers/produtos.controler";
+} from "../controllers/produtos.controller";
 import { getProcessosByProduto } from "../controllers/processos.controller";
 
 const router: Router = express.Router();
